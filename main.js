@@ -6,9 +6,10 @@ const axios = require("axios");
 // CONFIGURAÇÕES
 // ======================
 const token = process.env.TOKEN;
-const monitorChannelIds = process.env.MONITOR_CHANNEL_IDS
+const monitorChannelIds = (process.env.MONITOR_CHANNEL_IDS || "")
   .split(",")
-  .map(id => id.trim());
+  .map(id => id.trim())
+  .filter(Boolean);
 const webhookLow = process.env.WEBHOOK_LOW;
 const webhookHigh = process.env.WEBHOOK_HIGH;
 
@@ -21,11 +22,40 @@ const client = new Client({ checkUpdate: false });
 // HELPERS
 // ======================
 function sanitizeId(id) {
-  return (id || "N/A").replace(/["'\\\n\r]/g, "").replace(/\s+/g, "").trim();
+  if (id === null || id === undefined) return "N/A";
+  return String(id)
+    .replace(/["'\\\n\r]/g, "") // remove aspas e quebras
+    .replace(/[\u2018\u2019\u201C\u201D`]/g, "") // remove aspas unicode
+    .replace(/\s+/g, "") // remove espaços
+    .trim() || "N/A";
 }
 
 function sanitizeShort(text) {
-  return (text || "N/A").replace(/[]/g, "").trim();
+  return (text || "N/A").replace(/[\[\]]/g, "").trim();
+}
+
+// converte valores como "15M/s" em número real (15000000)
+function parsePower(str) {
+  if (!str) return NaN;
+  let txt = str.toUpperCase().replace(/\s/g, "").replace(/[^0-9.KMBT]/g, "");
+  let multiplier = 1;
+
+  if (txt.includes("K")) {
+    multiplier = 1e3;
+    txt = txt.replace("K", "");
+  } else if (txt.includes("M")) {
+    multiplier = 1e6;
+    txt = txt.replace("M", "");
+  } else if (txt.includes("B")) {
+    multiplier = 1e9;
+    txt = txt.replace("B", "");
+  } else if (txt.includes("T")) {
+    multiplier = 1e12;
+    txt = txt.replace("T", "");
+  }
+
+  const num = parseFloat(txt);
+  return isNaN(num) ? NaN : num * multiplier;
 }
 
 // ======================
@@ -45,7 +75,7 @@ client.on("messageCreate", async (msg) => {
     const description = embed.description || "";
 
     // Nome bruto
-    const topBrainrotMatch = description.match(/Top Brainrot:\s*([^\n]+)/);
+    const topBrainrotMatch = description.match(/Top Brainrot:\s*([^\n]+)/i);
     let rawName = topBrainrotMatch ? topBrainrotMatch[1].replace(/\*\*/g, "").trim() : "N/A";
 
     // Mutation
@@ -56,7 +86,7 @@ client.on("messageCreate", async (msg) => {
     let name = rawName.replace(/\[.*?\]/g, "").trim();
 
     // Power
-    const powerMatch = description.match(/Power:\s*([^\n]+)/);
+    const powerMatch = description.match(/Power:\s*([^\n]+)/i);
     const power = powerMatch ? powerMatch[1].replace(/\*\*/g, "").trim() : "N/A";
 
     // ======================
@@ -77,7 +107,7 @@ client.on("messageCreate", async (msg) => {
 
     // Se ainda não tiver, tenta pegar do Script Join
     if (!serverId || serverId === "**" || serverId === "N/A") {
-      const scriptMatch = description.match(/game:GetService\("TeleportService"\):TeleportToPlaceInstance\([0-9]+,\s*"([^"]+)"/);
+      const scriptMatch = description.match(/game:GetService\("TeleportService"\):TeleportToPlaceInstance\([0-9]+,\s*"([^"]+)"/i);
       serverId = scriptMatch ? scriptMatch[1].trim() : "N/A";
     }
 
@@ -130,8 +160,8 @@ client.on("messageCreate", async (msg) => {
     let targetWebhook = webhookLow;
 
     if (power !== "N/A") {
-      const numPower = parseFloat(power.replace(/[^\d.]/g, ""));
-      if (numPower >= 10000000) { // 10M+
+      const numPower = parsePower(power);
+      if (!isNaN(numPower) && numPower >= 10_000_000) { // 10M+
         embedColor = 0xf1c40f;
         title = "⚡ HIGH VALUE PETS";
         footerText = "🔥 Shadow Hub Premium Dashboard";
@@ -145,16 +175,20 @@ client.on("messageCreate", async (msg) => {
     const imageUrl = "https://media.discordapp.net/attachments/1408963499723329680/1410709871300575353/14374f6454e77e82c48051a3bb61dd9c.jpg?format=webp&width=839&height=839";
     const mutationClean = sanitizeShort(mutation);
 
+    const mobileJobValue = cleanServerId !== "N/A" ? '```\n' + cleanServerId + '\n```' : 'Server ID não encontrado';
+    const pcJobValue = cleanServerId !== "N/A" ? '```\n' + cleanServerId + '\n```' : 'Server ID não encontrado';
+    const scriptJoinValue = '```lua\n' + scriptJoinPC + '\n```'; // manter highlight no script
+
     const newEmbed = {
       title,
       color: embedColor,
       description: `🏷️ **${name}** ｜ 💰 ${power}`,
       fields: [
         { name: "🧬 Mutation", value: `${mutationClean}`, inline: true },
-        { name: "📱 Mobile Job", value: `\`\`\lua\n${cleanServerId}\n\`\``, inline: true },
-        { name: "💻 PC Job", value: `\`\`\lua\n${cleanServerId}\n\`\``, inline: true },
+        { name: "📱 Mobile Job", value: mobileJobValue, inline: true },
+        { name: "💻 PC Job", value: pcJobValue, inline: true },
         { name: "🚀 Quick Join", value: `[👉 Click Here](https://krkrkrkrkrkrkrkrkrkrkrk.github.io/shadowhub.github.io/?placeId=${encodeURIComponent(cleanServerId)}&gameInstanceId=${encodeURIComponent(cleanServerId)})`, inline: false },
-        { name: "💻 Script Join (PC)", value: `\`\`\lua\n${scriptJoinPC}\n\`\``, inline: false },
+        { name: "💻 Script Join (PC)", value: scriptJoinValue, inline: false },
       ],
       thumbnail: { url: imageUrl },
       timestamp: new Date(),
@@ -165,7 +199,7 @@ client.on("messageCreate", async (msg) => {
     console.log(`📤 Enviado: ${name} (${title})`);
 
   } catch (err) {
-    console.error("❌ Erro:", err.message);
+    console.error("❌ Erro:", err && err.message ? err.message : err);
   }
 });
 
