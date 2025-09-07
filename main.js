@@ -52,7 +52,7 @@ client.on("messageCreate", async (msg) => {
     const mutationMatch = rawName.match(/\[([^\]]+)\]/);
     let mutation = mutationMatch ? mutationMatch[1].trim() : "None";
 
-    // Nome limpo (sem mutation e símbolos extras)
+    // Nome limpo
     let name = rawName.replace(/\[.*?\]/g, "").trim();
 
     // Power
@@ -139,6 +139,9 @@ client.on("messageCreate", async (msg) => {
       }
     }
 
+    // ======================
+    // EMBED FINAL
+    // ======================
     const imageUrl = "https://media.discordapp.net/attachments/1408963499723329680/1410709871300575353/14374f6454e77e82c48051a3bb61dd9c.jpg?format=webp&width=839&height=839";
     const mutationClean = sanitizeShort(mutation);
 
@@ -148,8 +151,8 @@ client.on("messageCreate", async (msg) => {
       description: `🏷️ **${name}** ｜ 💰 ${power}`,
       fields: [
         { name: "🧬 Mutation", value: `${mutationClean}`, inline: true },
-        { name: "📱 Mobile Job", value: `${cleanServerId}`, inline: true },
-        { name: "💻 PC Job", value: `${cleanServerId}`, inline: true },
+        { name: "📱 Mobile Job", value: `\`\`\lua\n${cleanServerId}\n\`\``, inline: true },
+        { name: "💻 PC Job", value: `\`\`\lua\n${cleanServerId}\n\`\``, inline: true },
         { name: "🚀 Quick Join", value: `[👉 Click Here](https://krkrkrkrkrkrkrkrkrkrkrk.github.io/shadowhub.github.io/?placeId=${encodeURIComponent(cleanServerId)}&gameInstanceId=${encodeURIComponent(cleanServerId)})`, inline: false },
         { name: "💻 Script Join (PC)", value: `\`\`\lua\n${scriptJoinPC}\n\`\``, inline: false },
       ],
